@@ -53,12 +53,14 @@ ap.add_argument("--reps", type=int, default=3, help="2->32 atoms, 3->108 (real)"
 ap.add_argument("--steps", type=int, default=400)
 ap.add_argument("--lr", type=float, default=5e-4)
 ap.add_argument("--reg", type=float, default=2.0, help="stay-physical weight")
-ap.add_argument("--relax-every", type=int, default=50,
+ap.add_argument("--relax-every", type=int, default=0,
                 help="re-relax frozen geometries with the tuning weights every N steps")
 ap.add_argument("--system", choices=["cuni", "nial", "both"], default="cuni")
 ap.add_argument("--subset", choices=["readout", "all"], default="readout")
 ap.add_argument("--device", default="cpu")
 ap.add_argument("--fdcheck", action="store_true", help="FD-verify a few weights first")
+ap.add_argument("--benchmark", action="store_true",
+                help="score the property panel (mace_benchmark) pre/post and diff — catches whack-a-mole")
 ap.add_argument("--seed", type=int, default=0)
 args = ap.parse_args()
 REPS, N = args.reps, 4 * args.reps**3
@@ -162,6 +164,7 @@ if args.system in ("cuni", "both"):
     a = np.full(N, 29); a[rng.permutation(N)[: N // 2]] = 28
     struct["cuni_Cu"] = batch_of(relaxed(np.full(N, 29), 3.62))
     struct["cuni_Ni"] = batch_of(relaxed(np.full(N, 28), 3.52))
+    struct["cuni_mix_num"] = a
     struct["cuni_mix"] = batch_of(relaxed(a, 3.57))
 if args.system in ("nial", "both"):
     g = np.full(N, 28); g[rng.permutation(N)[: N // 8]] = 13      # 1/8 Al in fcc Ni
@@ -252,6 +255,17 @@ print(f"\nPretrained: Cu-Ni Omega {pre['cuni_omega_meV']:+.1f} meV "
 print(f"            physicality: Ag-Cu Omega "
       f"{pre['physicality']['agcu_omega_meV']:+.1f} meV")
 
+if args.benchmark:
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    import mace_benchmark as _mb
+    print("\n[benchmark] scoring the property panel BEFORE tuning…")
+    for p in params:
+        p.requires_grad_(False)
+    _bench_pre = _mb.evaluate(calc)
+    for p in params:
+        p.requires_grad_(True)
+
 opt = torch.optim.Adam(params, lr=args.lr)
 log = []
 print(f"\n[fine-tune] {args.steps} steps, lr {args.lr}, reg {args.reg}, "
@@ -292,8 +306,7 @@ for step in range(args.steps):
         for p in params:
             p.requires_grad_(False)
         if "cuni_mix" in struct:
-            a = np.full(N, 29); a[rng.permutation(N)[: N // 2]] = 28
-            struct["cuni_mix"] = batch_of(relaxed(a, 3.57))
+            struct["cuni_mix"] = batch_of(relaxed(struct["cuni_mix_num"], 3.57))
         for p in params:
             p.requires_grad_(True)
 
@@ -318,3 +331,11 @@ res = {"args": vars(args), "n_trainable_weights": int(n_param),
 with open(OUT / f"mace_finetune_stage2_{args.system}_{N}atom.json", "w") as f:
     json.dump(res, f, indent=1)
 print(f"\nWrote checkpoint {ckpt.name} + log json")
+
+if args.benchmark:
+    print("\n[benchmark] scoring the property panel AFTER tuning…")
+    for p in params:
+        p.requires_grad_(False)          # forward-only; MACE still gets forces via position-autograd
+    _bench_post = _mb.evaluate(calc)
+    print("\n[benchmark] whack-a-mole check (pre -> post):")
+    _mb.diff_dicts(_bench_pre, _bench_post)

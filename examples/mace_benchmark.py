@@ -33,25 +33,26 @@ from ase.filters import FrechetCellFilter
 OUT = Path(__file__).parent / "output"; OUT.mkdir(exist_ok=True)
 K_B = 8.617333e-5
 
-# ---- references (experiment unless noted DFT/CALPHAD); role: target|control|watch
+# ---- references; (ref, role, tol). role: target|control|watch. tol = the
+# error change (same units) that counts as a real move; smaller is noise.
 REF = {
-    # lattice constants, A
-    "a_Cu_fcc":  (3.615, "control"), "a_Ni_fcc": (3.524, "control"),
-    "a_Ag_fcc":  (4.085, "control"), "a_Al_fcc": (4.050, "control"),
-    "a_Si_dia":  (5.431, "control"), "a_Zn_hcp": (2.665, "watch"),
-    # polymorph lattice stabilities, meV/atom (DFT/CALPHAD sign is what matters)
-    "dE_Zn_fcc_hcp": (30.0,  "target"),   # hcp is ground state -> POSITIVE (MACE: -9, inverted)
-    "dE_Si_fcc_dia": (500.0, "watch"),    # DFT ~ +0.5 eV      (MACE: +424)
-    "dE_Cu_bcc_fcc": (40.0,  "watch"),    # DFT ~ +40 meV      (MACE: +26)
+    # lattice constants, A  (tol 0.015 A ~ a meaningful structural shift)
+    "a_Cu_fcc":  (3.615, "control", 0.015), "a_Ni_fcc": (3.524, "control", 0.015),
+    "a_Ag_fcc":  (4.085, "control", 0.015), "a_Al_fcc": (4.050, "control", 0.015),
+    "a_Si_dia":  (5.431, "control", 0.015), "a_Zn_hcp": (2.665, "watch",   0.015),
+    # polymorph lattice stabilities, meV/atom
+    "dE_Zn_fcc_hcp": (30.0,  "target", 10.0),   # hcp ground state -> POSITIVE (MACE inverts)
+    "dE_Si_fcc_dia": (500.0, "watch",  15.0),   # DFT ~ +0.5 eV      (MACE +424)
+    "dE_Cu_bcc_fcc": (40.0,  "watch",  15.0),   # DFT ~ +40 meV      (MACE +26)
     # equimolar mixing Omega, meV/atom
-    "Omega_AgCu": (340.0, "control"),     # CALPHAD ~ +340     (MACE: +374, good)
-    "Omega_CuNi": (105.0, "target"),      # 2kB*625K ~ +108    (MACE: +49, too low)
+    "Omega_AgCu": (340.0, "control", 15.0),     # CALPHAD ~ +340     (control; finite-size sensitive)
+    "Omega_CuNi": (105.0, "target",  15.0),     # 2kB*625K ~ +108    (MACE +49, too low)
     # compound formation energies, eV/atom
-    "Hf_Ni3Al_L12": (-0.43, "watch"),     # exp -0.42..-0.44
-    "Hf_NiAl_B2":   (-0.67, "watch"),     # exp -0.66..-0.68
+    "Hf_Ni3Al_L12": (-0.43, "watch", 0.02),
+    "Hf_NiAl_B2":   (-0.67, "watch", 0.02),
     # constructed phase-diagram features
-    "Tc_CuNi_K":    (625.0, "target"),    # assessed 600-650   (MACE: 282)
-    "Te_AgCu_K":    (1052.0, "control"),  # exp 1052           (MACE: 1054, good)
+    "Tc_CuNi_K":    (625.0, "target",  20.0),   # assessed 600-650   (MACE 282/436)
+    "Te_AgCu_K":    (1052.0, "control", 8.0),   # exp 1052 (the size-robust Ag-Cu control)
 }
 
 
@@ -136,7 +137,7 @@ def evaluate(calc, ckpt=None):
 def score(vals):
     print(f"\n{'property':<16}{'role':<9}{'value':>10}{'ref':>10}{'error':>10}")
     print("-"*55)
-    for k, (ref, role) in REF.items():
+    for k, (ref, role, tol) in REF.items():
         v = vals.get(k)
         if v is None: continue
         err = v - ref
@@ -144,16 +145,30 @@ def score(vals):
         print(f"{k:<16}{role:<9}{v:>10.3f}{ref:>10.3f}{err:>+9.2f} ({pct:+.0f}%)")
 
 
-def diff(base, tuned):
-    b, t = json.load(open(base)), json.load(open(tuned))
+def diff_dicts(b, t):
+    """Compare two panels; flag any control that regressed. Returns True if all
+    controls held (the tune is credible)."""
     print(f"\n{'property':<16}{'role':<9}{'baseline':>10}{'tuned':>9}{'ref':>9}   verdict")
     print("-"*66)
-    for k, (ref, role) in REF.items():
+    controls_ok = True
+    for k, (ref, role, tol) in REF.items():
         if k not in b or k not in t: continue
         eb, et = abs(b[k]-ref), abs(t[k]-ref)
-        tag = "IMPROVED" if et < eb-1e-9 else ("REGRESSED" if et > eb+1e-9 else "flat")
-        flag = "  <-- control regressed!" if (role=="control" and tag=="REGRESSED") else ""
+        delta = et - eb                     # change in |error|; + = worse than baseline
+        tag = "IMPROVED" if delta < -tol else ("REGRESSED" if delta > tol else "flat")
+        flag = ""
+        if role == "control" and tag == "REGRESSED":
+            controls_ok = False; flag = "  <-- CONTROL REGRESSED"
         print(f"{k:<16}{role:<9}{b[k]:>10.3f}{t[k]:>9.3f}{ref:>9.3f}   {tag}{flag}")
+    print("-"*66)
+    print("verdict: ALL CONTROLS HELD — tune is credible"
+          if controls_ok else
+          "verdict: CONTROL REGRESSION — the fix broke something; not credible as-is")
+    return controls_ok
+
+
+def diff(base, tuned):
+    diff_dicts(json.load(open(base)), json.load(open(tuned)))
 
 
 if __name__ == "__main__":
