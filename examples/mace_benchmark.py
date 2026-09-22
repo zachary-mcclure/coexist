@@ -42,7 +42,7 @@ REF = {
     "a_Si_dia":  (5.431, "control", 0.015), "a_Zn_hcp": (2.665, "watch",   0.015),
     # polymorph lattice stabilities, meV/atom
     "dE_Zn_fcc_hcp": (30.0,  "target", 10.0),   # hcp ground state -> POSITIVE (MACE inverts)
-    "dE_Si_fcc_dia": (500.0, "watch",  15.0),   # DFT ~ +0.5 eV      (MACE +424)
+    "dE_Si_fcc_dia": (500.0, "target", 15.0),   # DFT ~ +0.5 eV; tuned by mace_finetune_lattice
     "dE_Cu_bcc_fcc": (40.0,  "watch",  15.0),   # DFT ~ +40 meV      (MACE +26)
     # equimolar mixing Omega, meV/atom
     "Omega_AgCu": (340.0, "control", 15.0),     # CALPHAD ~ +340     (control; finite-size sensitive)
