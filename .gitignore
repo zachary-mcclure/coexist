@@ -1,0 +1,16 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+*.pyc
+.venv/
+
+# local-only home: manuscript, notes, archives, checkpoints — saved, not pushed
+local/
+examples/output/
+*.pt
+
+.DS_Store
+
+# secrets + editor config (never public)
+.env
+.vscode/
