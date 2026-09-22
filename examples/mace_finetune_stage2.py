@@ -284,12 +284,18 @@ for step in range(args.steps):
             msg += f"  NiAl x_Al {row['nial_xAl_solvus']:.3f}"
         print(msg)
 
-    # re-relax frozen geometries with the current weights (snapshot refresh)
+    # re-relax frozen geometries with the current weights (snapshot refresh).
+    # Freeze the trainable weights (not all grad) so MACE can still compute
+    # forces via position-autograd during relaxation; the refreshed geometry
+    # re-enters as detached data.
     if args.relax_every and (step + 1) % args.relax_every == 0 and step + 1 < args.steps:
-        with torch.no_grad():
-            if "cuni_mix" in struct:
-                a = np.full(N, 29); a[rng.permutation(N)[: N // 2]] = 28
-                struct["cuni_mix"] = batch_of(relaxed(a, 3.57))
+        for p in params:
+            p.requires_grad_(False)
+        if "cuni_mix" in struct:
+            a = np.full(N, 29); a[rng.permutation(N)[: N // 2]] = 28
+            struct["cuni_mix"] = batch_of(relaxed(a, 3.57))
+        for p in params:
+            p.requires_grad_(True)
 
 post = {"cuni_omega_meV": omega_cuni().item() * 1e3,
         "cuni_Tc_K": (omega_cuni() / (2 * K_B)).item(),
