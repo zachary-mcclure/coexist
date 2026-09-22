@@ -153,7 +153,10 @@ print("\nJoint result (pretrained -> tuned, target):")
 for k, tgt in [("CuNi_Tc",625),("NiAl_xAl",0.13),("Si_dE",500),("Zn_dE",30)]:
     moved = "toward" if abs(post[k]-tgt) < abs(pre[k]-tgt) else "AWAY"
     print(f"   {k:9s} {pre[k]:+.3f} -> {post[k]:+.3f}  (target {tgt})  [{moved}]")
-json.dump({"pre": pre, "post": post}, open(OUT/f"mace_finetune_joint_{N}.json","w"), indent=1)
+ckpt = OUT / f"mace_finetune_joint_{args.subset}_{N}.pt"
+torch.save({n: p.detach().cpu() for (n, _), p in zip(trainable, params)}, ckpt)
+json.dump({"subset": args.subset, "pre": pre, "post": post, "checkpoint": ckpt.name},
+          open(OUT/f"mace_finetune_joint_{args.subset}_{N}.json","w"), indent=1)
 
 if args.benchmark:
     print("\n[benchmark] AFTER…")
