@@ -36,5 +36,11 @@ echo "=== 4. Zn fcc-hcp lattice ordering (Cu-Zn Zn reference) ==="
 python examples/mace_finetune_lattice.py --pair Zn_fcc_hcp --reps "$REPS" \
     --steps "$STEPS" --device "$DEV" --benchmark
 
+echo "=== 5. JOINT all-weights tune (the headline) — all four targets at once ==="
+# tuning all ~3.85M weights vs 4 phase-diagram targets: the reverse-mode regime
+# forward-mode can't touch. reg small since it sums over ~200x more params.
+python examples/mace_finetune_joint.py --reps "$REPS" --steps "$STEPS" \
+    --subset all --reg 0.01 --device "$DEV" --benchmark
+
 echo "=== done. Each run printed a pre->post benchmark diff; a tune is only"
 echo "    credible if its controls held. Checkpoints + panels in examples/output/."
