@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coexist"
+version = "0.1.0"
+description = "Differentiable alloy phase diagrams from production-engine energetics"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "ase>=3.23",          # Atoms/structure I/O (CIF, XYZ, POSCAR, etc.)
+    "jax>=0.4.28",
+    "jaxlib>=0.4.28",
+]
+
+[tool.setuptools.packages.find]
+include = ["coexist*"]      # the library only; examples/tests/docs/notes are not packages
+
+[project.optional-dependencies]
+mace = [
+    "mace-torch>=0.3",    # MACE-MP-0 foundation-model energetics
+]
+lammps = [
+    "lammps>=2025.0.0",   # eam/alloy energetics; macOS: brew mpich + symlink lib{mpi,pmpi}.12.dylib
+]
+all = [
+    "mace-torch>=0.3",
+    "lammps>=2025.0.0",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::UserWarning:jax"]
