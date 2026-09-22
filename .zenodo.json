@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "title": "Coexist: Differentiable Alloy Phase Diagrams from Production-Engine Energetics (code, campaign scripts, and numerical outputs)",
+    "upload_type": "software",
+    "description": "Code and data archive accompanying the paper 'Differentiable Alloy Phase Diagrams from Production-Engine Energetics' (submitted to Computational Materials Science). Coexist treats common-tangent and invariant phase-diagram constructions as implicit layers: differentiating a fixed-iteration Newton solver with jax.grad returns derivatives of liquidus, solidus, solvus, and invariant points with respect to any upstream parameter, from engine-computed energetics down to a real potential parameter of an unmodified production engine (LAMMPS, MACE-MP-0). The archive contains the full library, the per-result campaign scripts in examples/ (each paper result regenerates from a single script, with numerical outputs stored as JSON), the interatomic potential files with NIST provenance, the pytest suite, and the manuscript sources.",
+    "creators": [
+      {
+        "name": "McClure, Zachary D.",
+        "affiliation": "Independent Researcher"
+      }
+    ],
+    "license": "apache-2.0",
+    "keywords": [
+      "alloy phase diagrams",
+      "differentiable programming",
+      "automatic differentiation",
+      "CALPHAD",
+      "machine-learned interatomic potentials",
+      "uncertainty quantification",
+      "JAX",
+      "common tangent construction"
+    ],
+    "version": "1.0.0"
+  }
+}

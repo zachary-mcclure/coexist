@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite both the software release and the
+  paper below.
+type: software
+title: "Coexist: differentiable alloy phase diagrams from production-engine energetics"
+authors:
+  - family-names: McClure
+    given-names: Zachary D.
+    email: zachary.d.mcclure@gmail.com
+    affiliation: Independent Researcher
+version: 1.0.0
+date-released: "2026-07-25"
+license: Apache-2.0
+# doi: 10.5281/zenodo.XXXXXXX   # uncomment and fill once the Zenodo DOI is reserved
+preferred-citation:
+  type: article
+  title: "Differentiable Alloy Phase Diagrams from Production-Engine Energetics"
+  authors:
+    - family-names: McClure
+      given-names: Zachary D.
+      affiliation: Independent Researcher
+  journal: Computational Materials Science
+  year: 2026
+  notes: Submitted.
