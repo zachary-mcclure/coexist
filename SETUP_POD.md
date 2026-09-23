@@ -1,5 +1,12 @@
 # Running the fine-tune battery on a GPU pod
 
+**One command** (clone through GPU-verified install):
+```bash
+curl -LsSf https://raw.githubusercontent.com/zachary-mcclure/coexist/main/scripts/build_pod.sh | bash
+cd coexist && bash scripts/run_pod.sh
+```
+Or from inside a fresh clone: `bash scripts/build_pod.sh`. The manual steps below are the same thing spelled out.
+
 Fresh pod (RunPod PyTorch template or bare CUDA), clone through run:
 
 ```bash
