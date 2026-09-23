@@ -241,16 +241,18 @@ T_GRID = torch.linspace(0.3 * TC_TARGET, 0.92 * TC_TARGET, 8)
 OM_TARGET = 2 * K_B * TC_TARGET
 C_TARGET = torch.stack([binodal_c(torch.tensor(OM_TARGET), float(T)) for T in T_GRID]).detach()
 
-pre = {"cuni_omega_meV": omega_cuni().item() * 1e3,
-       "cuni_Tc_K": (omega_cuni() / (2 * K_B)).item(),
-       "physicality": physicality()}
+pre = {"physicality": physicality()}
+if "cuni_mix" in struct:
+    pre["cuni_omega_meV"] = omega_cuni().item() * 1e3
+    pre["cuni_Tc_K"] = (omega_cuni() / (2 * K_B)).item()
 if "nial_g" in struct:
     xs, omg, hf = nial_solvus()
     pre["nial_xAl_solvus"] = xs.item()
     pre["nial_omega_g_meV"] = omg.item() * 1e3
-print(f"\nPretrained: Cu-Ni Omega {pre['cuni_omega_meV']:+.1f} meV "
-      f"(T_c {pre['cuni_Tc_K']:.0f} K, target {TC_TARGET:.0f})"
-      + (f" | Ni-Al x_Al solvus {pre.get('nial_xAl_solvus', float('nan')):.3f} "
+print("\nPretrained:"
+      + (f" Cu-Ni Omega {pre['cuni_omega_meV']:+.1f} meV "
+         f"(T_c {pre['cuni_Tc_K']:.0f} K, target {TC_TARGET:.0f})" if "cuni_mix" in struct else "")
+      + (f" | Ni-Al x_Al solvus {pre['nial_xAl_solvus']:.3f} "
          f"(target {XAL_TARGET})" if "nial_g" in struct else ""))
 print(f"            physicality: Ag-Cu Omega "
       f"{pre['physicality']['agcu_omega_meV']:+.1f} meV")
@@ -286,14 +288,16 @@ for step in range(args.steps):
 
     if step % max(1, args.steps // 20) == 0 or step == args.steps - 1:
         with torch.no_grad():
-            row = {"step": step, "loss": loss.item(), "reg": float(reg),
-                   "cuni_omega_meV": omega_cuni().item() * 1e3,
-                   "cuni_Tc_K": (omega_cuni() / (2 * K_B)).item()}
+            row = {"step": step, "loss": loss.item(), "reg": float(reg)}
+            if "cuni_mix" in struct:
+                row["cuni_omega_meV"] = omega_cuni().item() * 1e3
+                row["cuni_Tc_K"] = (omega_cuni() / (2 * K_B)).item()
             if "nial_g" in struct:
                 row["nial_xAl_solvus"] = nial_solvus()[0].item()
         log.append(row)
-        msg = (f"   step {step:4d}  loss {loss.item():.3e}  reg {float(reg):.2e}  "
-               f"CuNi T_c {row['cuni_Tc_K']:6.0f} K")
+        msg = f"   step {step:4d}  loss {loss.item():.3e}  reg {float(reg):.2e}"
+        if "cuni_mix" in struct:
+            msg += f"  CuNi T_c {row['cuni_Tc_K']:6.0f} K"
         if "nial_g" in struct:
             msg += f"  NiAl x_Al {row['nial_xAl_solvus']:.3f}"
         print(msg)
@@ -310,13 +314,18 @@ for step in range(args.steps):
         for p in params:
             p.requires_grad_(True)
 
-post = {"cuni_omega_meV": omega_cuni().item() * 1e3,
-        "cuni_Tc_K": (omega_cuni() / (2 * K_B)).item(),
-        "physicality": physicality()}
+post = {"physicality": physicality()}
+if "cuni_mix" in struct:
+    post["cuni_omega_meV"] = omega_cuni().item() * 1e3
+    post["cuni_Tc_K"] = (omega_cuni() / (2 * K_B)).item()
 if "nial_g" in struct:
     post["nial_xAl_solvus"] = nial_solvus()[0].item()
-print(f"\nTuned: Cu-Ni T_c {pre['cuni_Tc_K']:.0f} -> {post['cuni_Tc_K']:.0f} K "
-      f"(target {TC_TARGET:.0f})")
+if "cuni_mix" in struct:
+    print(f"\nTuned: Cu-Ni T_c {pre['cuni_Tc_K']:.0f} -> {post['cuni_Tc_K']:.0f} K "
+          f"(target {TC_TARGET:.0f})")
+if "nial_g" in struct:
+    print(f"Tuned: Ni-Al x_Al {pre['nial_xAl_solvus']:.3f} -> {post['nial_xAl_solvus']:.3f} "
+          f"(target {XAL_TARGET})")
 print(f"       physicality Ag-Cu Omega {pre['physicality']['agcu_omega_meV']:+.1f}"
       f" -> {post['physicality']['agcu_omega_meV']:+.1f} meV "
       f"(drift {post['physicality']['agcu_omega_meV']-pre['physicality']['agcu_omega_meV']:+.1f})")
