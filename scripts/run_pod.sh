@@ -15,7 +15,7 @@ source .venv/bin/activate 2>/dev/null || true
 
 DEV=${DEVICE:-cuda}          # override: DEVICE=cpu bash scripts/run_pod.sh
 REPS=${REPS:-3}              # 3 -> 108-atom converged cells
-STEPS=${STEPS:-500}
+STEPS=${STEPS:-150}
 
 echo "=== 0. baseline benchmark (pretrained MACE-MP-0) ==="
 python examples/mace_benchmark.py --device "$DEV" --out mace_benchmark_pretrained.json
