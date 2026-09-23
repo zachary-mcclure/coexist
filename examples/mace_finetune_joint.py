@@ -129,7 +129,7 @@ if args.benchmark:
     import sys; sys.path.insert(0, str(Path(__file__).parent)); import mace_benchmark as mb
     print("[benchmark] BEFORE…");
     for p in params: p.requires_grad_(False)
-    bpre = mb.evaluate(calc)
+    bpre = mb.evaluate(calc, reps=REPS)
     for p in params: p.requires_grad_(True)
 
 opt = torch.optim.Adam(params, lr=args.lr)
@@ -161,6 +161,6 @@ json.dump({"subset": args.subset, "pre": pre, "post": post, "checkpoint": ckpt.n
 if args.benchmark:
     print("\n[benchmark] AFTER…")
     for p in params: p.requires_grad_(False)
-    bpost = mb.evaluate(calc)
+    bpost = mb.evaluate(calc, reps=REPS)
     print("\n[benchmark] joint whack-a-mole check:")
     mb.diff_dicts(bpre, bpost)

@@ -89,7 +89,7 @@ if args.benchmark:
     import sys; sys.path.insert(0, str(Path(__file__).parent))
     import mace_benchmark as _mb
     print("[benchmark] scoring panel BEFORE…")
-    _pre = _mb.evaluate(calc)
+    _pre = _mb.evaluate(calc, reps=args.reps)
 
 opt = torch.optim.Adam(params, lr=args.lr)
 print(f"[fine-tune] {args.steps} steps, lr {args.lr}, reg {args.reg}")
@@ -114,7 +114,7 @@ json.dump({"pair": args.pair, "dE0_meV": d0*1e3, "dE_tuned_meV": dF*1e3,
 if args.benchmark:
     print("[benchmark] scoring panel AFTER…")
     for p in params: p.requires_grad_(False)
-    _post = _mb.evaluate(calc)
+    _post = _mb.evaluate(calc, reps=args.reps)
     print("\n[benchmark] whack-a-mole check (pre -> post):")
     _mb.diff_dicts(_pre, _post)
 print(f"\nWrote {ckpt.name} + json")

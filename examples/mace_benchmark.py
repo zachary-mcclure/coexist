@@ -74,7 +74,7 @@ def epa(calc, atoms):
     return atoms.get_potential_energy() / len(atoms)
 
 
-def evaluate(calc, ckpt=None):
+def evaluate(calc, ckpt=None, reps=2):
     """Compute the full panel on the current model (optionally a tuned ckpt)."""
     if ckpt:                                   # overlay tuned weights
         model = calc.models[0]
@@ -103,13 +103,14 @@ def evaluate(calc, ckpt=None):
     # --- equimolar mixing Omega (meV/atom), 32-atom random fcc ---
     def omega(elA, elB, aA, aB):
         rng = np.random.default_rng(0)
-        at = bulk(elA, "fcc", a=(aA+aB)/2, cubic=True).repeat((2,2,2))
-        nums = np.array([bulk(elA,"fcc").numbers[0]]*32)
-        nums[rng.permutation(32)[:16]] = bulk(elB,"fcc").numbers[0]
+        n = 4 * reps**3
+        at = bulk(elA, "fcc", a=(aA+aB)/2, cubic=True).repeat((reps,)*3)
+        nums = np.array([bulk(elA,"fcc").numbers[0]]*n)
+        nums[rng.permutation(n)[:n//2]] = bulk(elB,"fcc").numbers[0]
         at.set_atomic_numbers(nums)
         _, e_mix = relax(calc, at, cell_filter=True)
-        eA = r.get(f"_E_{elA}_fcc") or epa(calc, bulk(elA,"fcc",a=aA,cubic=True).repeat((2,2,2)))
-        eB = r.get(f"_E_{elB}_fcc") or epa(calc, bulk(elB,"fcc",a=aB,cubic=True).repeat((2,2,2)))
+        eA = r.get(f"_E_{elA}_fcc") or epa(calc, bulk(elA,"fcc",a=aA,cubic=True).repeat((reps,)*3))
+        eB = r.get(f"_E_{elB}_fcc") or epa(calc, bulk(elB,"fcc",a=aB,cubic=True).repeat((reps,)*3))
         return 4.0 * (e_mix - 0.5*eA - 0.5*eB) * 1e3
     r["Omega_AgCu"] = omega("Ag","Cu",4.085,3.615)
     r["Omega_CuNi"] = omega("Cu","Ni",3.615,3.524)
@@ -176,13 +177,14 @@ if __name__ == "__main__":
     ap.add_argument("--checkpoint")
     ap.add_argument("--out", default="mace_benchmark_pretrained.json")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--reps", type=int, default=2, help="mixing-Omega supercell size; match the tune (3=108 atoms)")
     ap.add_argument("--diff", nargs=2, metavar=("BASE","TUNED"))
     args = ap.parse_args()
     if args.diff:
         diff(*args.diff)
     else:
         calc, _ = build(args.device)
-        vals = evaluate(calc, ckpt=args.checkpoint)
+        vals = evaluate(calc, ckpt=args.checkpoint, reps=args.reps)
         score(vals)
         json.dump(vals, open(OUT/args.out, "w"), indent=1)
         print(f"\nwrote {OUT/args.out}")

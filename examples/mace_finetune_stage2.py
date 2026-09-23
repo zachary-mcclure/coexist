@@ -264,7 +264,7 @@ if args.benchmark:
     print("\n[benchmark] scoring the property panel BEFORE tuning…")
     for p in params:
         p.requires_grad_(False)
-    _bench_pre = _mb.evaluate(calc)
+    _bench_pre = _mb.evaluate(calc, reps=REPS)
     for p in params:
         p.requires_grad_(True)
 
@@ -345,6 +345,6 @@ if args.benchmark:
     print("\n[benchmark] scoring the property panel AFTER tuning…")
     for p in params:
         p.requires_grad_(False)          # forward-only; MACE still gets forces via position-autograd
-    _bench_post = _mb.evaluate(calc)
+    _bench_post = _mb.evaluate(calc, reps=REPS)
     print("\n[benchmark] whack-a-mole check (pre -> post):")
     _mb.diff_dicts(_bench_pre, _bench_post)
