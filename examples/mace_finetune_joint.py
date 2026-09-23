@@ -55,7 +55,7 @@ def relax(atoms, fmax=0.04):
 
 
 def E(b):
-    return MODEL(b, compute_force=False, training=True)["energy"].sum()
+    return MODEL(b, compute_force=False, training=True)["energy"].sum().cpu()
 
 
 def fcc(el, a):
@@ -140,7 +140,7 @@ for step in range(args.steps):
     l_nial = ((nial_solvus() - XAL_NIAL)/XAL_NIAL)**2
     l_si   = ((si_dE() - SI_TARGET)/SI_TARGET)**2
     l_zn   = ((zn_dE() - ZN_TARGET)/max(ZN_TARGET,0.03))**2
-    reg = sum(((p-t)**2).sum() for p, t in zip(params, theta0))
+    reg = sum(((p-t)**2).sum() for p, t in zip(params, theta0)).cpu()
     (l_cuni + l_nial + l_si + l_zn + args.reg*reg).backward(); opt.step()
     if step % max(1, args.steps//12) == 0 or step == args.steps-1:
         s = state()

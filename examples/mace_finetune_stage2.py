@@ -104,7 +104,7 @@ def batch_of(atoms):
 
 
 def energy(batch):
-    return MODEL(batch, compute_force=False, training=True)["energy"].sum()
+    return MODEL(batch, compute_force=False, training=True)["energy"].sum().cpu()
 
 
 # ------------------------------------------------ trainable weight subset
@@ -280,7 +280,7 @@ for step in range(args.steps):
     if args.system in ("nial", "both"):
         xs, _, _ = nial_solvus()
         loss = loss + ((xs - XAL_TARGET) / XAL_TARGET) ** 2
-    reg = sum(((p - t) ** 2).sum() for p, t in zip(params, theta0))
+    reg = sum(((p - t) ** 2).sum() for p, t in zip(params, theta0)).cpu()
     (loss + args.reg * reg).backward()
     opt.step()
 

@@ -61,7 +61,7 @@ def relaxed(el, lat, kw):
 
 
 def energy(batch):
-    return MODEL(batch, compute_force=False, training=True)["energy"].sum()
+    return MODEL(batch, compute_force=False, training=True)["energy"].sum().cpu()
 
 
 print(f"Relaxing {args.pair} allotropes…")
@@ -96,7 +96,7 @@ print(f"[fine-tune] {args.steps} steps, lr {args.lr}, reg {args.reg}")
 for step in range(args.steps):
     opt.zero_grad()
     d = dE_eV()
-    reg = sum(((p - t) ** 2).sum() for p, t in zip(params, theta0))
+    reg = sum(((p - t) ** 2).sum() for p, t in zip(params, theta0)).cpu()
     loss = ((d - TARGET) / max(abs(TARGET), 0.03)) ** 2 + args.reg * reg
     loss.backward(); opt.step()
     if step % max(1, args.steps // 12) == 0 or step == args.steps - 1:

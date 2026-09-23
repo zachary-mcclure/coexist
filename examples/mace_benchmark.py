@@ -56,9 +56,9 @@ REF = {
 }
 
 
-def build():
+def build(device="cpu"):
     from mace.calculators import mace_mp
-    calc = mace_mp(model="small", device="cpu", default_dtype="float64")
+    calc = mace_mp(model="small", device=device, default_dtype="float64")
     return calc, calc.models[0]
 
 
@@ -175,12 +175,13 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint")
     ap.add_argument("--out", default="mace_benchmark_pretrained.json")
+    ap.add_argument("--device", default="cpu")
     ap.add_argument("--diff", nargs=2, metavar=("BASE","TUNED"))
     args = ap.parse_args()
     if args.diff:
         diff(*args.diff)
     else:
-        calc, _ = build()
+        calc, _ = build(args.device)
         vals = evaluate(calc, ckpt=args.checkpoint)
         score(vals)
         json.dump(vals, open(OUT/args.out, "w"), indent=1)

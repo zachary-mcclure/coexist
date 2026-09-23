@@ -18,7 +18,7 @@ REPS=${REPS:-3}              # 3 -> 108-atom converged cells
 STEPS=${STEPS:-500}
 
 echo "=== 0. baseline benchmark (pretrained MACE-MP-0) ==="
-python examples/mace_benchmark.py --out mace_benchmark_pretrained.json
+python examples/mace_benchmark.py --device "$DEV" --out mace_benchmark_pretrained.json
 
 echo "=== 1. Cu-Ni miscibility gap (consolute) — flagship ==="
 python examples/mace_finetune_stage2.py --reps "$REPS" --steps "$STEPS" \
