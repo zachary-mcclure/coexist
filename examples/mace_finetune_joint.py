@@ -39,6 +39,8 @@ ap.add_argument("--lr", type=float, default=2e-3)
 ap.add_argument("--reg", type=float, default=0.5)
 ap.add_argument("--device", default="cpu")
 ap.add_argument("--benchmark", action="store_true")
+ap.add_argument("--anchor", type=float, default=5.0,
+                help="weight on holding Ag-Cu (a control) at its pretrained value")
 ap.add_argument("--subset", choices=["readout", "all"], default="readout",
                 help="which weights to tune — 'all' tests whether readout capacity is the bottleneck")
 args = ap.parse_args()
@@ -94,8 +96,12 @@ S["si_fcc"], NSF = relax(bulk("Si","fcc",a=3.9,cubic=True).repeat((REPS,)*3))
 S["si_dia"], NSD = relax(bulk("Si","diamond",a=5.43,cubic=True).repeat((max(1,REPS-1),)*3))
 S["zn_fcc"], NZF = relax(bulk("Zn","fcc",a=3.9,cubic=True).repeat((REPS,)*3))
 S["zn_hcp"], NZH = relax(bulk("Zn","hcp",a=2.66,c=4.95).repeat((REPS,)*3))
+# Ag-Cu is a CONTROL (MACE gets its eutectic right); build it so we can anchor it
+S["ag"], _ = relax(fcc("Ag", 4.09))
+S["agcu"], _ = relax(fcc_mix("Ag", "Cu", 3.85, 0.5))
 
 
+def omega_agcu(): return 4*(E(S["agcu"])/N - 0.5*E(S["ag"])/N - 0.5*E(S["cu"])/N)
 def omega_cuni(): return 4*(E(S["cuni"])/N - 0.5*E(S["cu"])/N - 0.5*E(S["ni"])/N)
 def nial_solvus():
     x = 0.125
@@ -113,17 +119,19 @@ else:
 for _, p in MODEL.named_parameters(): p.requires_grad_(False)
 for _, p in trainable: p.requires_grad_(True)
 params = [p for _, p in trainable]; theta0 = [p.detach().clone() for p in params]
+OM_AGCU0 = omega_agcu().detach()   # anchor Ag-Cu (control) at its good pretrained value
 print(f"Tuning {sum(p.numel() for p in params)} weights ({args.subset})")
 
 
 def state():
     with torch.no_grad():
         return dict(CuNi_Tc=(omega_cuni()/(2*K_B)).item(), NiAl_xAl=nial_solvus().item(),
-                    Si_dE=si_dE().item()*1e3, Zn_dE=zn_dE().item()*1e3)
+                    Si_dE=si_dE().item()*1e3, Zn_dE=zn_dE().item()*1e3,
+                    AgCu_Omega=omega_agcu().item()*1e3)
 pre = state()
 print(f"\nPretrained targets: Cu-Ni T_c {pre['CuNi_Tc']:.0f}K (->625)  "
       f"Ni-Al x_Al {pre['NiAl_xAl']:.3f} (->0.13)  Si {pre['Si_dE']:+.0f} (->500)  "
-      f"Zn {pre['Zn_dE']:+.0f}meV (->30)")
+      f"Zn {pre['Zn_dE']:+.0f}meV (->30)  | Ag-Cu Omega {pre['AgCu_Omega']:+.0f} meV (hold)")
 
 if args.benchmark:
     import sys; sys.path.insert(0, str(Path(__file__).parent)); import mace_benchmark as mb
@@ -140,13 +148,14 @@ for step in range(args.steps):
     l_nial = ((nial_solvus() - XAL_NIAL)/XAL_NIAL)**2
     l_si   = ((si_dE() - SI_TARGET)/SI_TARGET)**2
     l_zn   = ((zn_dE() - ZN_TARGET)/max(ZN_TARGET,0.03))**2
+    l_anchor = ((omega_agcu() - OM_AGCU0)/OM_AGCU0)**2   # keep the Ag-Cu control put
     reg = sum(((p-t)**2).sum() for p, t in zip(params, theta0)).cpu()
-    (l_cuni + l_nial + l_si + l_zn + args.reg*reg).backward(); opt.step()
+    (l_cuni + l_nial + l_si + l_zn + args.anchor*l_anchor + args.reg*reg).backward(); opt.step()
     if step % max(1, args.steps//12) == 0 or step == args.steps-1:
         s = state()
         print(f"   step {step:4d}  Tc {s['CuNi_Tc']:5.0f}  xAl {s['NiAl_xAl']:.3f}  "
               f"Si {s['Si_dE']:+5.0f}  Zn {s['Zn_dE']:+5.0f}  "
-              f"loss {(l_cuni+l_nial+l_si+l_zn).item():.3f}")
+              f"AgCu {s['AgCu_Omega']:+5.0f}  loss {(l_cuni+l_nial+l_si+l_zn).item():.3f}")
 
 post = state()
 print("\nJoint result (pretrained -> tuned, target):")
