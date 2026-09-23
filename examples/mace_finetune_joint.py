@@ -162,14 +162,18 @@ print("\nJoint result (pretrained -> tuned, target):")
 for k, tgt in [("CuNi_Tc",625),("NiAl_xAl",0.13),("Si_dE",500),("Zn_dE",30)]:
     moved = "toward" if abs(post[k]-tgt) < abs(pre[k]-tgt) else "AWAY"
     print(f"   {k:9s} {pre[k]:+.3f} -> {post[k]:+.3f}  (target {tgt})  [{moved}]")
-ckpt = OUT / f"mace_finetune_joint_{args.subset}_{N}.pt"
+tag = f"{args.subset}_{N}_reg{args.reg}_anc{args.anchor}"
+ckpt = OUT / f"mace_finetune_joint_{tag}.pt"
 torch.save({n: p.detach().cpu() for (n, _), p in zip(trainable, params)}, ckpt)
-json.dump({"subset": args.subset, "pre": pre, "post": post, "checkpoint": ckpt.name},
-          open(OUT/f"mace_finetune_joint_{args.subset}_{N}.json","w"), indent=1)
+result = {"subset": args.subset, "N": N, "reg": args.reg, "anchor": args.anchor,
+          "pre": pre, "post": post, "checkpoint": ckpt.name}
 
 if args.benchmark:
     print("\n[benchmark] AFTER…")
     for p in params: p.requires_grad_(False)
     bpost = mb.evaluate(calc, reps=REPS)
     print("\n[benchmark] joint whack-a-mole check:")
-    mb.diff_dicts(bpre, bpost)
+    controls_ok = mb.diff_dicts(bpre, bpost)
+    result.update(bench_pre=bpre, bench_post=bpost, controls_ok=bool(controls_ok))
+
+json.dump(result, open(OUT/f"mace_finetune_joint_{tag}.json", "w"), indent=1)
