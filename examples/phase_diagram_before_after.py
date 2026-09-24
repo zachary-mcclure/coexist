@@ -37,22 +37,28 @@ def omegas_from_run(json_path):
     return d["bench_pre"]["Omega_CuNi"] / 1e3, d["bench_post"]["Omega_CuNi"] / 1e3
 
 
-def binodal(omega, n=70):
+def binodal(omega, n=90):
     """Trace one regular-solution miscibility gap: (c_left, c_right, T) arrays.
 
     For each T below T_c = Omega/2k_B, the common tangent of G against itself
-    (seeded on opposite sides) gives the two coexisting solid compositions.
+    (seeded on opposite sides) gives the two coexisting solid compositions. The
+    gap narrows toward (0.5, T_c), so we warm-start each solve from the previous
+    temperature's root to keep Newton converged right up to the apex.
     """
     G = regular_solution(omega)
     Tc = omega / (2 * K_B)
-    Ts = np.linspace(0.03 * Tc, 0.995 * Tc, n)
+    Ts = np.linspace(0.03 * Tc, 0.9995 * Tc, n)
     cL, cR, Tk = [], [], []
+    ga, gb = 0.02, 0.98                       # seeds, warm-started below
     for T in Ts:
         ca, cb = common_tangent(G, G, jnp.asarray(T),
-                                 c_alpha_guess=0.05, c_beta_guess=0.95, n_iter=80)
+                                 c_alpha_guess=ga, c_beta_guess=gb, n_iter=120)
+        ca, cb = float(ca), float(cb)
         if float(tangent_residual(G, G, ca, cb, jnp.asarray(T))) < 1e-7 \
-                and float(cb - ca) > 2e-3:
-            cL.append(float(ca)); cR.append(float(cb)); Tk.append(float(T))
+                and cb - ca > 1e-3:
+            cL.append(ca); cR.append(cb); Tk.append(float(T))
+            ga, gb = ca, cb                   # track the narrowing gap upward
+    cL.append(0.5); cR.append(0.5); Tk.append(Tc)   # close the dome at the apex
     return np.array(cL), np.array(cR), np.array(Tk), Tc
 
 
