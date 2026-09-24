@@ -51,6 +51,8 @@ ap.add_argument("--target", type=float, default=None, help="target E_m (eV); def
 ap.add_argument("--steps", type=int, default=150)
 ap.add_argument("--lr", type=float, default=2e-3)
 ap.add_argument("--reg", type=float, default=0.1)
+ap.add_argument("--anchor", type=float, default=5.0,
+                help="weight on holding Ag-Cu Omega (the sensitive control) put")
 ap.add_argument("--subset", choices=["readout", "all"], default="all")
 ap.add_argument("--device", default="cpu")
 ap.add_argument("--benchmark", action="store_true")
@@ -108,6 +110,39 @@ def barrier():
     return E(b_sad) - E(b_init)
 
 
+# Ag-Cu mixing Omega is the hypersensitive control (it broke in the diagram
+# tune too); anchor it at its pretrained value, exactly as mace_finetune_joint.
+from ase.filters import FrechetCellFilter                       # noqa: E402
+_rng = np.random.default_rng(0)
+NAN = 4 * REPS ** 3
+
+
+def _relax_cell(atoms, fmax=0.04):
+    a = atoms.copy(); a.calc = calc
+    FIRE(FrechetCellFilter(a), logfile=None).run(fmax=fmax, steps=200)
+    return a
+
+
+def _fcc(el, a):
+    return bulk(el, "fcc", a=a, cubic=True).repeat((REPS,) * 3)
+
+
+def _fcc_mix(elA, elB, a, frac):
+    at = _fcc(elA, a); nums = at.get_atomic_numbers()
+    nums[_rng.permutation(NAN)[: int(round(frac * NAN))]] = bulk(elB, "fcc").numbers[0]
+    at.set_atomic_numbers(nums); return at
+
+
+print("Building Ag-Cu anchor structures…")
+b_ag = calc._atoms_to_batch(_relax_cell(_fcc("Ag", 4.09))).to_dict()
+b_cu = calc._atoms_to_batch(_relax_cell(_fcc("Cu", 3.615))).to_dict()
+b_agcu = calc._atoms_to_batch(_relax_cell(_fcc_mix("Ag", "Cu", 3.85, 0.5))).to_dict()
+
+
+def omega_agcu():
+    return 4.0 * (E(b_agcu) / NAN - 0.5 * E(b_ag) / NAN - 0.5 * E(b_cu) / NAN)
+
+
 # ── trainable weights ─────────────────────────────────────────────────────────
 if args.subset == "all":
     trainable = list(MODEL.named_parameters())
@@ -119,7 +154,9 @@ params = [p for _, p in trainable]; theta0 = [p.detach().clone() for p in params
 print(f"Tuning {sum(p.numel() for p in params)} weights ({args.subset})")
 
 EM0 = float(barrier().detach())
-print(f"\nFrozen-geometry barrier E_m = {EM0:.3f} eV  (target {TARGET:.2f} eV)")
+OM_AGCU0 = omega_agcu().detach()
+print(f"\nFrozen-geometry barrier E_m = {EM0:.3f} eV  (target {TARGET:.2f} eV) | "
+      f"Ag-Cu Omega {float(OM_AGCU0)*1e3:+.0f} meV (anchored)")
 
 if args.benchmark:
     import sys; sys.path.insert(0, str(Path(__file__).parent)); import mace_benchmark as mb
@@ -134,10 +171,13 @@ for step in range(args.steps):
     opt.zero_grad()
     em = barrier()
     l_bar = ((em - TARGET) / TARGET) ** 2
+    l_anchor = ((omega_agcu() - OM_AGCU0) / OM_AGCU0) ** 2
     reg = sum(((p - t) ** 2).sum() for p, t in zip(params, theta0)).cpu()
-    (l_bar + args.reg * reg).backward(); opt.step()
+    (l_bar + args.anchor * l_anchor + args.reg * reg).backward(); opt.step()
     if step % max(1, args.steps // 12) == 0 or step == args.steps - 1:
-        print(f"   step {step:4d}  E_m {float(em):.3f} eV  loss {float(l_bar):.4f}")
+        with torch.no_grad():
+            print(f"   step {step:4d}  E_m {float(em):.3f} eV  "
+                  f"AgCu {float(omega_agcu())*1e3:+.0f} meV  loss {float(l_bar):.4f}")
 
 EM1 = float(barrier().detach())
 print(f"\nMigration barrier E_m: {EM0:.3f} -> {EM1:.3f} eV  (target {TARGET:.2f})")
