@@ -151,6 +151,8 @@ else:
 for _, p in MODEL.named_parameters(): p.requires_grad_(False)
 for _, p in trainable: p.requires_grad_(True)
 params = [p for _, p in trainable]; theta0 = [p.detach().clone() for p in params]
+from tune_diag import theta0_norm, rel_move, move_stats   # weight-movement tracking
+THETA0N = theta0_norm(theta0)
 print(f"Tuning {sum(p.numel() for p in params)} weights ({args.subset})")
 
 EM0 = float(barrier().detach())
@@ -177,17 +179,19 @@ for step in range(args.steps):
     if step % max(1, args.steps // 12) == 0 or step == args.steps - 1:
         with torch.no_grad():
             print(f"   step {step:4d}  E_m {float(em):.3f} eV  "
-                  f"AgCu {float(omega_agcu())*1e3:+.0f} meV  loss {float(l_bar):.4f}")
+                  f"AgCu {float(omega_agcu())*1e3:+.0f} meV  "
+                  f"dW {rel_move(params,theta0,THETA0N)*100:.3f}%  loss {float(l_bar):.4f}")
 
 EM1 = float(barrier().detach())
 print(f"\nMigration barrier E_m: {EM0:.3f} -> {EM1:.3f} eV  (target {TARGET:.2f})")
 
-tag = f"neb_{EL}_{args.subset}_reg{args.reg}"
+tag = f"neb_{EL}_{args.subset}_reg{args.reg}_anc{args.anchor}"
 ckpt = OUT / f"mace_finetune_{tag}.pt"
 torch.save({n: p.detach().cpu() for (n, _), p in zip(trainable, params)}, ckpt)
 result = {"element": EL, "Em_neb_pretrained": Em_neb, "Em_frozen_pre": EM0,
           "Em_frozen_tuned": EM1, "target": TARGET, "subset": args.subset,
-          "reg": args.reg, "checkpoint": ckpt.name}
+          "reg": args.reg, "anchor": args.anchor, "checkpoint": ckpt.name}
+result.update(move_stats(params, theta0))   # n trained, rel L2, max move, %moved
 
 if args.benchmark:
     print("\n[benchmark] AFTER…")

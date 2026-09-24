@@ -120,6 +120,8 @@ for _, p in MODEL.named_parameters(): p.requires_grad_(False)
 for _, p in trainable: p.requires_grad_(True)
 params = [p for _, p in trainable]; theta0 = [p.detach().clone() for p in params]
 OM_AGCU0 = omega_agcu().detach()   # anchor Ag-Cu (control) at its good pretrained value
+from tune_diag import theta0_norm, rel_move, move_stats   # weight-movement tracking
+THETA0N = theta0_norm(theta0)
 print(f"Tuning {sum(p.numel() for p in params)} weights ({args.subset})")
 
 
@@ -155,7 +157,8 @@ for step in range(args.steps):
         s = state()
         print(f"   step {step:4d}  Tc {s['CuNi_Tc']:5.0f}  xAl {s['NiAl_xAl']:.3f}  "
               f"Si {s['Si_dE']:+5.0f}  Zn {s['Zn_dE']:+5.0f}  "
-              f"AgCu {s['AgCu_Omega']:+5.0f}  loss {(l_cuni+l_nial+l_si+l_zn).item():.3f}")
+              f"AgCu {s['AgCu_Omega']:+5.0f}  dW {rel_move(params,theta0,THETA0N)*100:.3f}%"
+              f"  loss {(l_cuni+l_nial+l_si+l_zn).item():.3f}")
 
 post = state()
 print("\nJoint result (pretrained -> tuned, target):")
@@ -167,6 +170,7 @@ ckpt = OUT / f"mace_finetune_joint_{tag}.pt"
 torch.save({n: p.detach().cpu() for (n, _), p in zip(trainable, params)}, ckpt)
 result = {"subset": args.subset, "N": N, "reg": args.reg, "anchor": args.anchor,
           "pre": pre, "post": post, "checkpoint": ckpt.name}
+result.update(move_stats(params, theta0))   # n trained, rel L2, max move, %moved
 
 if args.benchmark:
     print("\n[benchmark] AFTER…")

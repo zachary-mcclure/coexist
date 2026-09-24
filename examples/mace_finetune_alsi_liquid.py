@@ -131,6 +131,8 @@ else:
 for _, p in MODEL.named_parameters(): p.requires_grad_(False)
 for _, p in trainable: p.requires_grad_(True)
 params = [p for _, p in trainable]; theta0 = [p.detach().clone() for p in params]
+from tune_diag import theta0_norm, rel_move, move_stats   # weight-movement tracking
+THETA0N = theta0_norm(theta0)
 print(f"Tuning {sum(p.numel() for p in params)} weights ({args.subset})")
 
 OM_L0 = float(omega_l().detach())
@@ -154,7 +156,8 @@ for step in range(args.steps):
     reg = sum(((p - t)**2).sum() for p, t in zip(params, theta0)).cpu()
     (l_liq + args.reg * reg).backward(); opt.step()
     if step % max(1, args.steps // 12) == 0 or step == args.steps - 1:
-        print(f"   step {step:4d}  Omega_L {float(oml)*1e3:+6.0f} meV  loss {float(l_liq):.4f}")
+        print(f"   step {step:4d}  Omega_L {float(oml)*1e3:+6.0f} meV  "
+              f"dW {rel_move(params,theta0,THETA0N)*100:.3f}%  loss {float(l_liq):.4f}")
 
 OM_L1 = float(omega_l().detach())
 print(f"\nOmega_L: {OM_L0*1e3:+.0f} -> {OM_L1*1e3:+.0f} meV  (target {TARGET*1e3:+.0f})")
@@ -165,6 +168,7 @@ torch.save({nm: p.detach().cpu() for (nm, _), p in zip(trainable, params)}, ckpt
 result = {"omega_l_pre": OM_L0, "omega_l_tuned": OM_L1, "target": TARGET,
           "reps": REPS, "subset": args.subset, "reg": args.reg,
           "checkpoint": ckpt.name}
+result.update(move_stats(params, theta0))   # n trained, rel L2, max move, %moved
 
 if args.benchmark:
     print("\n[benchmark] AFTER…")
